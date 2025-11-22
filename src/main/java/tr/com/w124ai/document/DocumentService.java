@@ -1,117 +1,105 @@
 package tr.com.w124ai.document;
 
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.springframework.http.ResponseEntity;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import tr.com.w124ai.chunker.Chunker;
+import tr.com.w124ai.chunker.ChunkerFactory;
+import tr.com.w124ai.ignore.IgnoreFileLoader;
+import tr.com.w124ai.ignore.IgnoreRules;
+import tr.com.w124ai.ollama.OllamaService;
+import tr.com.w124ai.qdrant.QdrantService;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Service
 public class DocumentService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(DocumentService.class);
+
+    private static final List<String> SUPPORTED_EXTENSIONS = List.of(
+            ".java", ".xml", ".yml", ".yaml", ".json", ".properties", ".md", ".txt"
+    );
+    private IgnoreRules ignoreRules;
+
+    private final OllamaService ollamaService;
+    private final QdrantService qdrantService;
+
+    public DocumentService(OllamaService ollamaService, QdrantService qdrantService) {
+        this.ollamaService = ollamaService;
+        this.qdrantService = qdrantService;
+    }
+
+    @PostConstruct
+    public void init() throws Exception {
+        File ignoreFile = new File(".gitignore");
+        this.ignoreRules = IgnoreFileLoader.loadIgnoreFile(ignoreFile);
+    }
 
     public void processAndStoreDocument(MultipartFile file) throws Exception {
-        byte[] bytes = file.getBytes();
 
-        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(bytes))) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            String text = stripper.getText(document);
-            System.out.println("Extracted text length: " + text.length());
-            System.out.println("Extracted text snippet: " + text.substring(0, Math.min(500, text.length())));
+        Map<String, String> extractedFiles = extractZip(file.getBytes());
 
-            List<String> chunks = splitTextToChunks(text, 300);
+        int idCounter = 1;
 
-            for (int i = 0; i < chunks.size(); i++) {
-                List<Double> embedding = getEmbedding(chunks.get(i));
-                storeInQdrant(i, embedding, chunks.get(i));
+        for (Map.Entry<String, String> entry : extractedFiles.entrySet()) {
+
+            String fileName = entry.getKey();
+            String content = entry.getValue();
+
+            Chunker chunker = ChunkerFactory.getChunker(fileName);
+            List<String> chunks = chunker.chunk(content);
+            log.info("Indexlenen dosya: {} | Boyut: {} | Chunker: {}", fileName, content.length(), chunker.getClass().getName());
+
+            for (String ch : chunks) {
+                List<Double> emb = ollamaService.getEmbedding(ch);
+                qdrantService.storeInQdrant(idCounter++, emb, ch, fileName);
             }
         }
     }
 
-    private List<String> splitTextToChunks(String text, int chunkSize) {
-        // Basit olarak metni chunkSize büyüklüğünde bölüyoruz
-        List<String> chunks = new java.util.ArrayList<>();
-        int length = text.length();
-        for (int start = 0; start < length; start += chunkSize) {
-            int end = Math.min(length, start + chunkSize);
-            chunks.add(text.substring(start, end));
+    private Map<String, String> extractZip(byte[] zipBytes) throws IOException {
+        Map<String, String> files = new LinkedHashMap<>();
+
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry;
+
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName();
+
+                // Klasörleri atla
+                if (entry.isDirectory())
+                    continue;
+
+                // Sadece desteklenen dosyalar
+                if (isSupported(name)) {
+                    String content = new String(zis.readAllBytes());
+                    files.put(name, content);
+                }
+
+                zis.closeEntry();
+            }
         }
-        return chunks;
+
+        return files;
     }
 
+    private boolean isSupported(String fileName) {
+        return SUPPORTED_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+    }
 
     public String query(String question) throws Exception {
-        List<Double> questionVec = getEmbedding(question);
-        List<String> matchedChunks = searchQdrant(questionVec);
-
+        List<Double> questionVec = ollamaService.getEmbedding(question);
+        List<String> matchedChunks = qdrantService.searchQdrant(questionVec);
         String context = String.join("\n", matchedChunks);
-        return queryOllama(context, question);
-    }
-
-    private List<Double> getEmbedding(String text) {
-        Map<String, Object> body = Map.of("model", "nomic-embed-text", "prompt", text);
-        ResponseEntity<Map> mapResponseEntity = restTemplate.postForEntity("http://localhost:11434/api/embeddings", body, Map.class);
-        return (List<Double>) mapResponseEntity.getBody().get("embedding");
-    }
-
-    private void ensureCollectionExists() {
-        Map<String, Object> vectors = Map.of(
-                "size", 768,
-                "distance", "Cosine"
-        );
-
-        try {
-            restTemplate.put("http://localhost:6333/collections/docs", Map.of("vectors", vectors));
-        } catch (Exception e) {
-            if (!e.getMessage().contains("already exists")) {
-                throw e;
-            }
-        }
-    }
-
-    private void storeInQdrant(int id, List<Double> vector, String text) {
-        ensureCollectionExists();
-
-        Map<String, Object> point = Map.of(
-                "id", id,
-                "vector", vector,
-                "payload", Map.of("text", text)
-        );
-
-        Map<String, Object> body = Map.of(
-                "points", List.of(point)
-        );
-
-        restTemplate.put("http://localhost:6333/collections/docs/points", body);
-    }
-
-
-
-    private List<String> searchQdrant(List<Double> vector) {
-        Map<String, Object> body = Map.of(
-                "vector", vector,
-                "top", 3,
-                "with_payload", true
-        );
-        ResponseEntity<Map> response = restTemplate.postForEntity("http://localhost:6333/collections/docs/points/search", body, Map.class);
-        List<Map<String, Object>> results = (List<Map<String, Object>>) response.getBody().get("result");
-        return results.stream()
-                .map(r -> ((Map<String, Object>) r.get("payload")).get("text").toString())
-                .collect(Collectors.toList());
-    }
-
-
-    private String queryOllama(String context, String question) {
-        String prompt = "Context:\n" + context + "\n\nQuestion: " + question;
-        Map<String, Object> body = Map.of("model", "gemma3:4b", "prompt", prompt, "stream", false);
-        ResponseEntity<Map> response = restTemplate.postForEntity("http://localhost:11434/api/generate", body, Map.class);
-        return response.getBody().get("response").toString();
+        return ollamaService.queryOllama(context, question);
     }
 }
