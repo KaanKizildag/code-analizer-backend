@@ -1,4 +1,4 @@
-package tr.com.w124ai.chunker;
+package tr.com.analizer.chunker;
 
 import java.util.ArrayList;
 import java.util.List;

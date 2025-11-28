@@ -1,4 +1,4 @@
-package tr.com.w124ai;
+package tr.com.analizer;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

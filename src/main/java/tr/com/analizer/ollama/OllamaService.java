@@ -1,4 +1,4 @@
-package tr.com.w124ai.ollama;
+package tr.com.analizer.ollama;
 
 import org.slf4j.Logger;
 import org.springframework.ai.chat.model.ChatModel;

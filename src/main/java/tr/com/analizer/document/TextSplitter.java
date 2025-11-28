@@ -1,4 +1,4 @@
-package tr.com.w124ai.document;
+package tr.com.analizer.document;
 
 import java.util.ArrayList;
 import java.util.List;

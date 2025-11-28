@@ -1,4 +1,4 @@
-package tr.com.w124ai.document;
+package tr.com.analizer.document;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

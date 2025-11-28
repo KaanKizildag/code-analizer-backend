@@ -1,15 +1,15 @@
-package tr.com.w124ai.document;
+package tr.com.analizer.document;
 
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import tr.com.w124ai.chunker.Chunker;
-import tr.com.w124ai.chunker.ChunkerFactory;
-import tr.com.w124ai.ignore.IgnoreFileLoader;
-import tr.com.w124ai.ignore.IgnoreRules;
-import tr.com.w124ai.ollama.OllamaService;
-import tr.com.w124ai.qdrant.QdrantService;
+import tr.com.analizer.chunker.Chunker;
+import tr.com.analizer.chunker.ChunkerFactory;
+import tr.com.analizer.ignore.IgnoreFileLoader;
+import tr.com.analizer.ignore.IgnoreRules;
+import tr.com.analizer.ollama.OllamaService;
+import tr.com.analizer.qdrant.QdrantService;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;

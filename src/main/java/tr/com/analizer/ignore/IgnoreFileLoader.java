@@ -1,4 +1,4 @@
-package tr.com.w124ai.ignore;
+package tr.com.analizer.ignore;
 
 import java.io.*;
 import java.util.*;

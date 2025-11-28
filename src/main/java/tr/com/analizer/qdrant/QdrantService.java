@@ -1,4 +1,4 @@
-package tr.com.w124ai.qdrant;
+package tr.com.analizer.qdrant;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
