@@ -1,5 +1,10 @@
 package tr.com.w124ai.ollama;
 
+import org.slf4j.Logger;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -10,10 +15,21 @@ import java.util.Map;
 @Service
 public class OllamaService {
 
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(OllamaService.class);
     private final RestTemplate restTemplate;
     private final String ollamaBaseUrl = "http://localhost:11434";
+    private final ChatModel chatModel;
 
     public OllamaService() {
+        this.chatModel = OllamaChatModel.builder()
+                .ollamaApi(new OllamaApi(ollamaBaseUrl))
+                .defaultOptions(
+                        OllamaOptions.builder()
+                                .temperature(0.1)
+                                .model("deepseek-coder:1.3b")
+                                .build()
+                )
+                .build();
         this.restTemplate = new RestTemplate();
     }
 
