@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class W124AiApplication {
+public class CodeAnalizerApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(W124AiApplication.class, args);
+        SpringApplication.run(CodeAnalizerApplication.class, args);
     }
 
 }
